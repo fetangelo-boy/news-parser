@@ -2,7 +2,7 @@ name: Daily News Parser
 
 on:
   schedule:
-    - cron: '0 21,3,9,15 * * *'
+    - cron: '0 */3 * * *'   # каждые 3 часа
   workflow_dispatch:
 
 jobs:
