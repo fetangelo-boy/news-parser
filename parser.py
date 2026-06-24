@@ -22,7 +22,7 @@ CHANNELS = [
     '@tass_agency'
 ]
 
-LIMIT_PER_CHANNEL = 100
+LIMIT_PER_CHANNEL = 150
 MAX_TEXT_LENGTH = 5000
 DB_FILE = 'news.db'
 SESSION_NAME = 'parser_session'
