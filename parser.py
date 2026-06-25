@@ -16,7 +16,10 @@ if not API_ID or not API_HASH:
 
 # Список каналов (можно оставить жёстко или тоже вынести в переменные)
 CHANNELS = [
-    '+-_V19XANAdFkOWFi',
+    CHANNELS = [
+    'Trader3P',
+    'stocksi',
+    '+-_V19XANAdFkOWFi',  # пока оставим так, позже разберёмся
     '@moex_official',
     '@rbc_news',
     '@tass_agency'
