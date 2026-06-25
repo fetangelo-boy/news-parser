@@ -14,12 +14,11 @@ API_HASH = os.getenv('API_HASH', '')
 if not API_ID or not API_HASH:
     raise ValueError("API_ID и API_HASH должны быть заданы в переменных окружения")
 
-# Список каналов (можно оставить жёстко или тоже вынести в переменные)
+# Список каналов
 CHANNELS = [
-    CHANNELS = [
     'Trader3P',
     'stocksi',
-    '+-_V19XANAdFkOWFi',  # пока оставим так, позже разберёмся
+    '+-_V19XANAdFkOWFi',
     '@moex_official',
     '@rbc_news',
     '@tass_agency'
