@@ -21,6 +21,7 @@ CHANNELS = [
     '@moex_official',
     '@rbc_news',
     '@tass_agency'
+    '@markettwits'
 ]
 
 LIMIT_PER_CHANNEL = 150
