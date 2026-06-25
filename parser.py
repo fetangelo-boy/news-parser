@@ -18,7 +18,6 @@ if not API_ID or not API_HASH:
 CHANNELS = [
     'Trader3P',
     'stocksi',
-    '+-_V19XANAdFkOWFi',
     '@moex_official',
     '@rbc_news',
     '@tass_agency'
