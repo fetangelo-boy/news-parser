@@ -19,7 +19,7 @@ CHANNELS = [
     'Trader3P',
     'stocksi',
     '@moex_official',
-    '@rbc_news',
+    '@rbc_news'
     '@tass_agency'
     '@markettwits'
 ]
