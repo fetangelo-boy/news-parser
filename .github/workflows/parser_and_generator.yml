@@ -2,8 +2,8 @@ name: Парсинг + Генерация поста
 
 on:
   schedule:
-    - cron: '0 7 * * 3'  # среда в 10:00 МСК
-    - cron: '0 7 * * 6'  # суббота в 10:00 МСК
+    - cron: '0 7 * * 3'
+    - cron: '0 7 * * 6'
   workflow_dispatch:
 
 jobs:
@@ -27,6 +27,9 @@ jobs:
         shell: bash
 
       - name: Парсинг новостей
+        env:
+          API_ID: ${{ secrets.API_ID }}
+          API_HASH: ${{ secrets.API_HASH }}
         run: python parser.py
 
       - name: Экспорт новостей за 5 дней
