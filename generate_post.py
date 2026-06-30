@@ -3,12 +3,15 @@
 Генератор постов для Telegram-канала трейдеров.
 После генерации текст проходит через редактора (второй запрос к DeepSeek)
 для устранения AI-стиля, длинных тире, клише и воды.
+Дополнительно отправляет отдельные сообщения с контекстом новостей
+и описанием сюжета для иллюстрации.
 """
 
 import os
 import sys
 import json
 import argparse
+import re
 import requests
 from pathlib import Path
 from datetime import datetime
@@ -66,7 +69,7 @@ def edit_post(raw_text: str) -> str:
         "5. Убирай лишние слова, воду, повторы. Оставляй только суть.\n"
         "6. Используй разговорную грамматику, но без сленга. Пиши как в обычной человеческой речи.\n"
         "7. Без пафоса и лишних обещаний. Главное — ясность и смысл.\n"
-        "8. Запрещено использовать длинное тире '—'. Заменяй на обычный дефис '-' или точку.\n"
+        "8. Запрещено использовать длинное тире '—'. Заменяй на обычный дефис '-' или точку. Это критическое требование.\n"
         "9. Запрещено использовать двоеточие, кроме случаев, когда оно уже было в исходном тексте "
         "(например, в заголовках или перечислениях). Не добавляй новые двоеточия.\n"
         "10. Не используй шаблонные связки ('во-первых', 'во-вторых') и не перегружай текст перечислениями.\n"
@@ -75,7 +78,21 @@ def edit_post(raw_text: str) -> str:
         "Верни только исправленный текст, без пояснений и без обрамления."
     )
     user_edit = f"Отредактируй следующий текст:\n\n{raw_text}"
-    return call_deepseek(system_edit, user_edit)
+    edited = call_deepseek(system_edit, user_edit)
+    
+    # ---- ЖЁСТКАЯ ПОСТОБРАБОТКА ----
+    # 1. Заменяем все длинные тире на дефисы
+    edited = edited.replace("—", "-")
+    # 2. Убираем двойные дефисы (если случайно появились)
+    edited = edited.replace("--", "-")
+    # 3. Убираем множественные пробелы
+    edited = re.sub(r'\s+', ' ', edited)
+    # 4. Убираем пробелы перед знаками препинания (.,!?:)
+    edited = re.sub(r'\s+([.,!?:])', r'\1', edited)
+    # 5. Приводим кавычки к единообразию (опционально, можно отключить)
+    # edited = edited.replace("«", '"').replace("»", '"')
+    
+    return edited
 
 def send_to_telegram(text: str) -> None:
     """Отправляет сообщение в технический Telegram-канал."""
@@ -87,6 +104,47 @@ def send_to_telegram(text: str) -> None:
     }
     response = requests.post(url, json=payload)
     response.raise_for_status()
+
+def send_news_context(news_text: str) -> None:
+    """Отправляет отдельное сообщение с новостным контекстом."""
+    if not news_text:
+        message = "⚠️ Новостей для контекста не было (файл news_for_article.txt пуст или отсутствовал)."
+    else:
+        # Обрезаем, если слишком длинное
+        if len(news_text) > 3000:
+            news_text = news_text[:3000] + "...\n(обрезано)"
+        message = f"📰 **Новости, использованные для генерации поста:**\n\n{news_text}"
+    
+    url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
+    payload = {
+        "chat_id": TELEGRAM_CHAT_ID,
+        "text": message,
+        "parse_mode": "Markdown"
+    }
+    requests.post(url, json=payload).raise_for_status()
+
+def generate_illustration_prompt(post_text: str) -> str:
+    """Генерирует описание сюжета для иллюстрации на основе поста."""
+    system_prompt = (
+        "Ты — художник-иллюстратор. Твоя задача — по тексту поста для трейдеров придумать "
+        "конкретный, яркий и визуальный сюжет для иллюстрации. "
+        "Опиши сцену, персонажей, детали, цвета, атмосферу. "
+        "Сделай это в виде короткого промпта (2-3 предложения), который можно отправить в нейросеть. "
+        "Избегай абстракций, дай чёткие образы."
+    )
+    user_prompt = f"Пост:\n{post_text[:2000]}\n\nПридумай описание иллюстрации."
+    return call_deepseek(system_prompt, user_prompt)
+
+def send_illustration_prompt(prompt: str) -> None:
+    """Отправляет описание иллюстрации отдельным сообщением."""
+    message = f"🎨 **Сюжет для иллюстрации к посту:**\n\n{prompt}"
+    url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
+    payload = {
+        "chat_id": TELEGRAM_CHAT_ID,
+        "text": message,
+        "parse_mode": "Markdown"
+    }
+    requests.post(url, json=payload).raise_for_status()
 
 def generate_post(post_type: str) -> str:
     """
@@ -172,10 +230,25 @@ def main():
         print("Редактирование текста (убираем AI-стиль)...")
         edited = edit_post(raw)
 
-        print("Отправка в Telegram...")
+        # ---- НОВЫЕ ШАГИ ----
+        # 1. Отправляем контекст новостей (читаем файл заново, чтобы показать, что использовалось)
+        news_path = BASE_DIR / "news_for_article.txt"
+        news_text = ""
+        if news_path.exists():
+            news_text = read_file(news_path)
+        send_news_context(news_text)
+
+        # 2. Отправляем основной пост
+        print("Отправка поста в Telegram...")
         send_to_telegram(edited)
 
+        # 3. Генерируем и отправляем описание иллюстрации
+        print("Генерация описания иллюстрации...")
+        illustration_prompt = generate_illustration_prompt(edited)
+        send_illustration_prompt(illustration_prompt)
+
         print("✅ Пост сгенерирован, отредактирован и отправлен.")
+        print("✅ Контекст новостей и описание иллюстрации также отправлены.")
     except Exception as e:
         print(f"❌ Ошибка: {e}")
         sys.exit(1)
