@@ -8,6 +8,7 @@
 import os
 import sys
 import json
+import argparse
 import requests
 from pathlib import Path
 from datetime import datetime
@@ -108,15 +109,11 @@ def generate_post(post_type: str) -> str:
 
     # Читаем план и находим нужную тему
     plan_text = read_file(plan_path)
-    # Упрощённо: ищем блок с номером поста (цифра и точка)
-    # В реальности план может быть структурирован иначе - используем простой парсинг
-    # Можно улучшить, но для демонстрации оставим как есть.
     lines = plan_text.splitlines()
     topic = None
     for i, line in enumerate(lines):
         if line.strip().startswith(f"{current_num}.") or line.strip().startswith(f"{current_num})"):
             topic = line.strip()
-            # Захватываем описание до следующей цифры
             description = []
             j = i + 1
             while j < len(lines) and not lines[j].strip().startswith(tuple(f"{n}." for n in range(1, 10))):
@@ -162,11 +159,12 @@ def generate_post(post_type: str) -> str:
     return raw_post
 
 def main():
-    if len(sys.argv) < 2:
-        print("Использование: python generate_post.py <type>")
-        sys.exit(1)
+    parser = argparse.ArgumentParser(description="Генератор постов для Telegram-канала трейдеров")
+    parser.add_argument("--type", required=True, choices=POST_TYPES,
+                        help="Тип поста: psychology, theory, motivation, indices")
+    args = parser.parse_args()
+    post_type = args.type
 
-    post_type = sys.argv[1]
     try:
         print(f"Генерация поста типа '{post_type}'...")
         raw = generate_post(post_type)
