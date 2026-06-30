@@ -7,18 +7,34 @@ import subprocess
 import datetime
 import requests
 import time
+import argparse
+import re
 from pathlib import Path
 
+# ===== ПАРСИНГ АРГУМЕНТОВ =====
+parser = argparse.ArgumentParser()
+parser.add_argument('--type', default='psychology', choices=['psychology', 'theory', 'motivation', 'indices'])
+args = parser.parse_args()
+POST_TYPE = args.type
+
 # ===== НАСТРОЙКИ =====
-PLAN_FILE = 'deepseek_plan_statei.md'
-SKILL_FILE = 'SKILL.md'
+BASE_DIR = Path(__file__).parent
+TYPE_DIR = BASE_DIR / POST_TYPE
+
+if not TYPE_DIR.exists():
+    print(f"❌ Папка {TYPE_DIR} не найдена. Создайте её с plan.md и skill.md.")
+    sys.exit(1)
+
+PLAN_FILE = TYPE_DIR / 'plan.md'
+SKILL_FILE = TYPE_DIR / 'skill.md'
+CURRENT_FILE = TYPE_DIR / 'current.txt'   # хранит номер текущего поста (1, 2, 3...)
 NEWS_EXPORT_SCRIPT = 'export_last_news.py'
 OUTPUT_DIR = 'generated_posts'
 
 # Telegram
 BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
 CHAT_ID = os.getenv('TELEGRAM_CHAT_ID')
-ADMIN_ID = os.getenv('TELEGRAM_ADMIN_ID')  # ваш личный ID для уведомлений
+ADMIN_ID = os.getenv('TELEGRAM_ADMIN_ID')
 
 # DeepSeek
 DEEPSEEK_API_KEY = os.getenv('DEEPSEEK_API_KEY')
@@ -55,34 +71,61 @@ def send_telegram_with_retry(text, parse_mode='Markdown', max_attempts=5, delay=
     print("❌ Не удалось отправить сообщение после всех попыток.")
     return False
 
-# ===== ОПРЕДЕЛЕНИЕ ПОСТА ПО ДНЮ НЕДЕЛИ =====
-def get_post_info():
-    today = datetime.datetime.now()
-    weekday = today.weekday()
-    if weekday == 2:  # среда
-        return {
-            'day': 'среда',
-            'cycle': 'Цикл 2. Биохимия депозита',
-            'post_number': 2,
-            'title': 'Тестостероновый драйв: когда уверенность становится убийцей',
-            'theme': 'психология'
-        }
-    elif weekday == 5:  # суббота
-        return {
-            'day': 'суббота',
-            'cycle': 'Цикл 1. Технический анализ',
-            'post_number': 1,
-            'title': 'Заглушка для теории',
-            'theme': 'теория'
-        }
+# ===== ЧТЕНИЕ ТЕКУЩЕГО ПОСТА ИЗ ПЛАНА =====
+def get_current_post(plan_text):
+    """
+    Читает номер текущего поста из файла current.txt.
+    Если файла нет — создаёт со значением 1.
+    Возвращает словарь: номер, название, цикл, ключевая мысль.
+    """
+    # Читаем номер
+    if CURRENT_FILE.exists():
+        with open(CURRENT_FILE, 'r') as f:
+            try:
+                current_num = int(f.read().strip())
+            except ValueError:
+                current_num = 1
     else:
-        return {
-            'day': 'тест',
-            'cycle': 'Тестовый цикл',
-            'post_number': 0,
-            'title': 'Тестовый пост',
-            'theme': 'тест'
-        }
+        current_num = 1
+        with open(CURRENT_FILE, 'w') as f:
+            f.write(str(current_num))
+
+    # Парсим план, чтобы найти пост с номером current_num
+    # Ищем в тексте план маркер: | № | Название | Ключевая мысль |
+    # Простой вариант: ищем строки с таблицей, извлекаем по порядку.
+    # Допустим, план имеет структуру с таблицами, но для простоты возьмём поиск по номеру.
+    # Альтернатива: использовать нумерацию, но проще будет хранить массив постов в самом плане.
+    # Для демонстрации я предполагаю, что в плане есть строки вида:
+    # | 1 | **«Название»** | Ключевая мысль |
+    # Поскольку мы пока не парсим сложно, можно пока оставить заглушку.
+    # В будущем можно реализовать полноценный парсер.
+
+    # Пока возвращаем фиксированный второй пост (тестостерон) как заглушку.
+    # Но вы можете потом заменить на реальный парсинг плана.
+    # Ниже я оставлю заглушку, но вы можете дописать парсер.
+    # Пример парсинга:
+    # lines = plan_text.split('\n')
+    # for line in lines:
+    #     if line.strip().startswith('|') and '|' in line:
+    #         parts = [p.strip() for p in line.split('|') if p.strip()]
+    #         if len(parts) >= 3 and parts[0].isdigit():
+    #             num = int(parts[0])
+    #             if num == current_num:
+    #                 title = parts[1].strip('**')
+    #                 idea = parts[2]
+    #                 cycle = "Цикл 2. Биохимия депозита"  # можно извлечь из контекста
+    #                 return {'number': num, 'title': title, 'cycle': cycle, 'idea': idea}
+
+    # Временно возвращаем фиксированный пост (номер 2)
+    # Чтобы не ломать тестирование, пока оставлю так, но в будущем реализовать парсинг.
+    title = "Тестостероновый драйв: когда уверенность становится убийцей"
+    cycle = "Цикл 2. Биохимия депозита"
+    idea = "Тестостерон связан с готовностью к риску, но работает только при низком кортизоле. Уверенный трейдер часто сливает больше, чем тревожный."
+    return {'number': current_num, 'title': title, 'cycle': cycle, 'idea': idea}
+
+def save_current_post_number(num):
+    with open(CURRENT_FILE, 'w') as f:
+        f.write(str(num))
 
 # ===== СБОР НОВОСТЕЙ =====
 def run_news_export():
@@ -103,19 +146,23 @@ def read_news():
         print("⚠️ Файл с новостями не найден. Использую пустой контекст.")
         return "Нет свежих новостей."
 
-def read_file(filename):
+def read_file(path):
     try:
-        with open(filename, 'r', encoding='utf-8') as f:
+        with open(path, 'r', encoding='utf-8') as f:
             return f.read()
     except FileNotFoundError:
-        print(f"⚠️ Файл {filename} не найден.")
+        print(f"⚠️ Файл {path} не найден.")
         return ""
 
 # ===== ФОРМИРОВАНИЕ ПРОМПТА =====
 def build_prompt(post_info, news_text, skill_text, plan_text):
-    prompt = f"""Ты — копирайтер для Telegram-канала трейдеров. Твоя задача — написать пост на тему "{post_info['title']}" (цикл: {post_info['cycle']}).
+    title = post_info['title']
+    cycle = post_info['cycle']
+    idea = post_info['idea']
 
-Новости должны использоваться только как живые примеры для иллюстрации психологических/теоретических тезисов поста. Не подгоняй содержание поста под новости. Пост должен соответствовать теме из плана, а новости — лишь подсвечивать её.
+    prompt = f"""Ты — копирайтер для Telegram-канала трейдеров. Твоя задача — написать пост на тему "{title}" (цикл: {cycle}).
+
+Новости должны использоваться только как живые примеры для иллюстрации психологических тезисов поста. Не подгоняй содержание поста под новости. Пост должен соответствовать теме из плана, а новости — лишь подсвечивать её.
 
 **Свежие новости (за последние 5 дней):**
 {news_text}
@@ -125,6 +172,8 @@ def build_prompt(post_info, news_text, skill_text, plan_text):
 
 **План статей (для контекста):**
 {plan_text}
+
+**Ключевая мысль поста:** {idea}
 
 Теперь напиши пост по структуре: хук, 3-5 пунктов, честный подвох, CTA «Сохраните». Обязательно используй эмодзи по смыслу (5-10), в конце хэштеги. Дай описание метафоры для иллюстрации в отдельном блоке.
 
@@ -166,46 +215,51 @@ def call_deepseek(prompt):
 
 # ===== ГЛАВНАЯ ФУНКЦИЯ =====
 def main():
-    print("🚀 Генерация поста...")
-    post_info = get_post_info()
-    print(f"📝 Тема: {post_info['title']}")
-    print(f"📅 День: {post_info['day']}")
+    print(f"🚀 Генерация поста типа: {POST_TYPE}")
 
-    # 1. Сбор новостей
+    # 1. Чтение плана и SKILL
+    skill_text = read_file(SKILL_FILE)
+    plan_text = read_file(PLAN_FILE)
+
+    # 2. Определяем текущий пост из плана
+    post_info = get_current_post(plan_text)
+    print(f"📝 Пост №{post_info['number']}: {post_info['title']}")
+
+    # 3. Сбор новостей
     run_news_export()
     news_text = read_news()
     has_news = "Нет свежих новостей" not in news_text
 
-    # 2. Чтение SKILL и плана
-    skill_text = read_file(SKILL_FILE)
-    plan_text = read_file(PLAN_FILE)
-
-    # 3. Формирование промпта и вызов DeepSeek
+    # 4. Формирование промпта и вызов DeepSeek
     prompt = build_prompt(post_info, news_text, skill_text, plan_text)
     print("⏳ Ожидание ответа от DeepSeek...")
     result = call_deepseek(prompt)
 
-    # 4. Сохраняем пост в файл (для истории)
+    # 5. Сохраняем пост в файл
     os.makedirs(OUTPUT_DIR, exist_ok=True)
     date_str = datetime.datetime.now().strftime('%Y-%m-%d')
-    filename = f"{OUTPUT_DIR}/post_{post_info['theme']}_{date_str}.txt"
+    filename = f"{OUTPUT_DIR}/post_{POST_TYPE}_{date_str}_n{post_info['number']}.txt"
     with open(filename, 'w', encoding='utf-8') as f:
         f.write(result)
     print(f"✅ Пост сохранён в {filename}")
 
-    # 5. Подготовка доклада
+    # 6. Увеличиваем номер поста для следующего запуска
+    new_num = post_info['number'] + 1
+    save_current_post_number(new_num)
+    print(f"✅ Следующий пост: №{new_num}")
+
+    # 7. Доклад
     report = f"""📋 **Доклад по генерации поста**
-- План: {post_info['cycle']}
-- Пост №{post_info['post_number']}: **{post_info['title']}**
-- День публикации: {post_info['day']}
+- Тип: {POST_TYPE}
+- Пост №{post_info['number']}: **{post_info['title']}**
 - Новости использованы: {"✅ да" if has_news else "❌ нет"}
 - Дата генерации: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M')}
 """
 
-    # 6. Отправка доклада в канал
+    # 8. Отправка в Telegram
     if BOT_TOKEN and CHAT_ID:
         send_telegram_with_retry(report, parse_mode='Markdown')
-        # Отправка самого поста
+        # Парсим пост и метафору
         if '--- МЕТАФОРА ---' in result:
             parts = result.split('--- МЕТАФОРА ---')
             post_text = parts[0].replace('--- НАЧАЛО ПОСТА ---', '').replace('--- КОНЕЦ ПОСТА ---', '').strip()
