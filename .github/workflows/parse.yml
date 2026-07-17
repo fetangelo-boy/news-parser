@@ -1,0 +1,58 @@
+name: Парсинг новостей (вручную)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  parse:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Проверка репозитория
+        uses: actions/checkout@v4
+
+      - name: Установка Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Кэш pip
+        uses: actions/cache@v3
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      # ----- ВАЖНО: кэшируем файл базы данных, чтобы накапливать новости между запусками -----
+      - name: Кэш базы данных news.db
+        uses: actions/cache@v3
+        with:
+          path: news.db
+          key: news-db-cache-v1   # можно изменить версию при смене структуры
+
+      - name: Установка зависимостей
+        run: |
+          pip install --upgrade pip
+          pip install telethon requests
+
+      - name: Восстановление сессии Telethon
+        run: |
+          echo "${{ secrets.SESSION_BASE64 }}" | base64 -d > parser_session.session
+        shell: bash
+
+      - name: Парсинг новостей
+        env:
+          API_ID: ${{ secrets.API_ID }}
+          API_HASH: ${{ secrets.API_HASH }}
+        run: python parser.py
+
+      - name: Экспорт всех новостей в JSON
+        run: python export_all_news.py
+
+      - name: Загрузка артефакта (все новости)
+        uses: actions/upload-artifact@v4
+        with:
+          name: all-news
+          path: all_news.json
+          if-no-files-found: error
