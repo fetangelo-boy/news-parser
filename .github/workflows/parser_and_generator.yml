@@ -2,13 +2,14 @@ name: Парсинг + Генерация поста
 
 on:
   schedule:
-    - cron: '0 7 * * 3'
-    - cron: '0 7 * * 6'
-  workflow_dispatch:
+    - cron: '0 7 * * 3'   # каждую среду
+    - cron: '0 7 * * 6'   # каждую субботу
+  workflow_dispatch:       # ручной запуск
 
 jobs:
   run:
     runs-on: ubuntu-latest
+
     steps:
       - name: Проверка репозитория
         uses: actions/checkout@v4
@@ -18,13 +19,30 @@ jobs:
         with:
           python-version: '3.10'
 
+      # Кэширование пакетов pip для ускорения последующих запусков
+      - name: Кэш pip
+        uses: actions/cache@v3
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
       - name: Установка зависимостей
-        run: pip install telethon requests
+        run: |
+          pip install --upgrade pip
+          pip install telethon requests
+          # если есть requirements.txt, используйте его:
+          # pip install -r requirements.txt
 
       - name: Восстановление сессии Telethon
         run: |
           echo "${{ secrets.SESSION_BASE64 }}" | base64 -d > parser_session.session
         shell: bash
+
+      # Диагностика – проверяем, что сессия создалась
+      - name: Проверка файлов перед парсингом
+        run: ls -la
 
       - name: Парсинг новостей
         env:
@@ -32,8 +50,14 @@ jobs:
           API_HASH: ${{ secrets.API_HASH }}
         run: python parser.py
 
+      - name: Проверка файлов после парсинга
+        run: ls -la
+
       - name: Экспорт новостей за 5 дней
         run: python export_last_news.py
+
+      - name: Проверка файлов после экспорта
+        run: ls -la
 
       - name: Генерация поста
         env:
@@ -42,3 +66,20 @@ jobs:
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           TELEGRAM_ADMIN_ID: ${{ secrets.TELEGRAM_ADMIN_ID }}
         run: python generate_post.py
+
+      - name: Проверка итоговых файлов
+        run: ls -la
+
+      # Загрузка всех возможных результатов как артефакт
+      - name: Загрузка результатов как артефакт
+        uses: actions/upload-artifact@v4
+        with:
+          name: news-posting-results
+          # Укажите точные имена файлов или папок, если известны:
+          # например: news.json, exported_news.json, post.txt
+          path: |
+            *.json
+            *.txt
+            *.md
+            *.db
+          if-no-files-found: warn   # не проваливаем workflow, если файлов нет
