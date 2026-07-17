@@ -1,0 +1,65 @@
+name: Daily News Parser
+
+on:
+  schedule:
+    # Запуск каждый день в 00:00, 06:00, 12:00, 18:00 по Москве (UTC+3)
+    - cron: '0 21,3,9,15 * * *'
+  workflow_dispatch:  # возможность запустить вручную
+
+jobs:
+  parse:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Проверка репозитория
+        uses: actions/checkout@v4
+
+      - name: Установка Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Установка зависимостей
+        run: pip install telethon
+
+      - name: Восстановление сессии Telethon
+        env:
+          SESSION_BASE64: ${{ secrets.SESSION_BASE64 }}
+        run: |
+          if [ -n "$SESSION_BASE64" ]; then
+            echo "$SESSION_BASE64" | base64 -d > parser_session.session
+            echo "✓ Сессия восстановлена"
+          else
+            echo "⚠ SESSION_BASE64 не задан — сессия не восстановлена"
+          fi
+
+      - name: Восстановление базы данных из кэша
+        id: cache-db
+        uses: actions/cache@v4
+        with:
+          path: news.db
+          key: ${{ runner.os }}-news-db
+          restore-keys: |
+            ${{ runner.os }}-news-db
+
+      - name: Запуск парсера
+        env:
+          API_ID: ${{ secrets.API_ID }}
+          API_HASH: ${{ secrets.API_HASH }}
+        run: python parser.py
+
+      - name: Сохранение базы данных в кэш
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: news.db
+          key: ${{ runner.os }}-news-db
+
+      - name: Экспорт свежих новостей в TXT
+        run: python export_last_news.py
+
+      - name: Загрузка артефакта с новостями
+        uses: actions/upload-artifact@v4
+        with:
+          name: свежие-новости
+          path: news_for_article.txt
