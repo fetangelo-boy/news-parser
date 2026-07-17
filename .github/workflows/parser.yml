@@ -6,6 +6,9 @@ on:
     - cron: '0 21,3,9,15 * * *'
   workflow_dispatch:  # возможность запустить вручную
 
+permissions:
+  contents: write  # чтобы бот мог пушить news_for_article.txt
+
 jobs:
   parse:
     runs-on: ubuntu-latest
@@ -59,7 +62,10 @@ jobs:
         run: python export_last_news.py
 
       - name: Коммит и пуш новостей в репозиторий
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          git remote set-url origin https://x-access-token:$GITHUB_TOKEN@github.com/${{ github.repository }}
           git config user.name "news-parser-bot"
           git config user.email "bot@news-parser"
           git add -f news_for_article.txt
