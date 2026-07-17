@@ -1,7 +1,7 @@
 # Навык: Парсер новостей из Telegram
 
 ## Описание
-Собирает новости из заданных Telegram-каналов (включая приватные по invite-ссылке), сохраняет их в SQLite-базу и экспортирует свежие новости за 5 дней в TXT-файл. Запускается по расписанию через GitHub Actions.
+Собирает новости из Telegram-каналов (включая приватные по invite-ссылке), сохраняет в SQLite-базу и публикует свежий дайджест за 5 дней в файл `news_for_article.txt` прямо в репозиторий. Запускается по расписанию через GitHub Actions.
 
 ## Источники
 
@@ -19,36 +19,36 @@
 Список расширяется в переменной `CHANNELS` в `parser.py`. Приватные каналы задаются как `{'name': 'Название', 'invite_hash': 'xxx'}`.
 
 ## Структура проекта
-- `parser.py` — основной скрипт парсинга (Telethon). Поддерживает публичные каналы по username и приватные по invite-хэшу.
-- `export_last_news.py` — экспортирует новости за последние 5 дней из `news.db` в `news_for_article.txt`.
-- `.githubworkflows/parser.yml` — GitHub Actions workflow (TXT-артефакт: `свежие-новости`).
-- `news.db` — SQLite-база накопленных новостей.
+- `parser.py` — основной скрипт парсинга (Telethon). Поддерживает публичные и приватные каналы.
+- `export_last_news.py` — экспортирует последние 100 новостей за 5 дней в `news_for_article.txt` (600 символов на пост, с фильтрацией рекламы и подписок).
+- `.github/workflows/parser.yml` — GitHub Actions workflow (авто-коммит дайджеста в репозиторий).
+- `news.db` — SQLite-база накопленных новостей (кэшируется между запусками).
 - `parser_session.session` — сессия Telethon (аутентификация).
 
-## Как работает накопление
-- База данных `news.db` кэшируется между запусками (благодаря `actions/cache`).
-- Поле `raw_message_id` имеет ограничение `UNIQUE` — дублирующиеся сообщения игнорируются.
-- После каждого запуска создаётся артефакт `свежие-новости` с TXT-файлом последних новостей за 5 дней.
+## Фильтрация текста
+При экспорте из текста удаляются:
+- Строки с ключевыми словами: «подписаться», «реклама», «партнёрский», «промокод», «t.me/+» и др.
+- Markdown-ссылки `[текст](url)` — остаётся только текст ссылки.
+- Голые URL-ссылки на Telegram.
+
+## Результат
+После каждого запуска файл `news_for_article.txt` автоматически коммитится в репозиторий. Доступен на главной странице: https://github.com/fetangelo-boy/news-parser
 
 ## Запуск
-1. Перейти в раздел **Actions** репозитория.
-2. Выбрать workflow **"Daily News Parser"**.
-3. Нажать **"Run workflow"**.
-4. Скачать артефакт `свежие-новости` после завершения — внутри `news_for_article.txt`.
+1. Перейти на https://github.com/fetangelo-boy/news-parser
+2. **Actions** → **Daily News Parser** → **Run workflow**
+3. Через ~3 мин обновится файл `news_for_article.txt` в корне репозитория
 
 ## Требуемые секреты GitHub
-- `API_ID` — ваш Telegram API ID
-- `API_HASH` — ваш Telegram API Hash
-- `SESSION_BASE64` — base64-кодированная сессия Telethon (`parser_session.session`)
+- `API_ID` — Telegram API ID
+- `API_HASH` — Telegram API Hash
+- `SESSION_BASE64` — base64 сессии Telethon
 
 ### Как получить SESSION_BASE64
-1. Убедитесь, что локально есть рабочий `parser_session.session`.
-2. Выполните в терминале:
-   ```
-   base64 parser_session.session > session_base64.txt
-   ```
-   (на Windows — используйте Git Bash или онлайн-конвертер)
-3. Скопируйте содержимое в секрет `SESSION_BASE64` на GitHub.
+```bash
+python -c "import base64; open('session_base64.txt','w').write(base64.b64encode(open('parser_session.session','rb').read()).decode())"
+```
+Скопировать содержимое `session_base64.txt` в секрет `SESSION_BASE64` на GitHub.
 
 ## Расписание
 4 раза в день по Москве: 00:00, 06:00, 12:00, 18:00.
