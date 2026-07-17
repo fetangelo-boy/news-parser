@@ -58,8 +58,10 @@ jobs:
       - name: Экспорт свежих новостей в TXT
         run: python export_last_news.py
 
-      - name: Загрузка артефакта с новостями
-        uses: actions/upload-artifact@v4
-        with:
-          name: свежие-новости
-          path: news_for_article.txt
+      - name: Коммит и пуш новостей в репозиторий
+        run: |
+          git config user.name "news-parser-bot"
+          git config user.email "bot@news-parser"
+          git add -f news_for_article.txt
+          git diff --cached --quiet || git commit -m "news: свежий дайджест $(date +'%Y-%m-%d %H:%M')"
+          git push
