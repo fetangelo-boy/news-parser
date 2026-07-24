@@ -23,8 +23,7 @@ CHANNELS = [
     '@moex_official',
     '@rbc_news',
     '@tass_agency',
-    'https://t.me/cbrstocks',
-    'https://t.me/cbrstocks/61357',
+    'cbrstocks',
     '@markettwits',
     {'name': 'Full-Time Trading', 'invite_hash': '-_V19XANAdFkOWFi'},
 ]
